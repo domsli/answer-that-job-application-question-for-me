@@ -1,0 +1,14 @@
+{
+  "name": "job-fill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension that drafts job-application answers from your resume.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "icons": "node scripts/make-icons.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}

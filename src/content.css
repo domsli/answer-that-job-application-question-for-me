@@ -1,0 +1,219 @@
+:host {
+  all: initial;
+  position: fixed;
+  z-index: 2147483647;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.chip,
+.panel,
+.toast {
+  position: fixed;
+  font-family: "Segoe UI", sans-serif;
+  color: #1f1a14;
+  box-sizing: border-box;
+}
+
+.chip {
+  border: 0;
+  border-radius: 999px;
+  background: #0e6b52;
+  color: #f7f3ea;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  padding: 7px 10px;
+  box-shadow: 0 8px 20px rgba(20, 40, 30, 0.22);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: #0b5340;
+}
+
+.panel {
+  width: 340px;
+  max-height: min(440px, calc(100vh - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #fffcf7;
+  border: 1px solid #e4dccf;
+  border-radius: 14px;
+  box-shadow: 0 16px 50px rgba(40, 30, 10, 0.18);
+}
+
+.panel-head,
+.actions,
+.adjust {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-head {
+  justify-content: space-between;
+}
+
+.mark {
+  font-family: Palatino, "Palatino Linotype", serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.question,
+.disclaimer,
+.meta,
+.status {
+  margin: 0;
+}
+
+.question {
+  color: #4e483f;
+  font-size: 12.5px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.draft {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 1px solid #e4dccf;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f1a14;
+  padding: 8px 10px;
+  font: 13px/1.45 "Segoe UI", sans-serif;
+  box-sizing: border-box;
+}
+
+.adjust input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e4dccf;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f1a14;
+  padding: 6px 8px;
+  font: 12px/1.3 "Segoe UI", sans-serif;
+}
+
+.meta,
+.disclaimer,
+.status {
+  color: #6e675e;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.status.error,
+.meta.over {
+  color: #8d3428;
+}
+
+.panel.needs-setup .status {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8e6e1;
+  font-size: 13px;
+}
+
+.panel.needs-setup .draft,
+.panel.needs-setup .meta,
+.panel.needs-setup .disclaimer,
+.panel.needs-setup .adjust,
+.panel.needs-setup .actions {
+  display: none;
+}
+
+.actions {
+  justify-content: flex-end;
+}
+
+button.primary,
+button.quiet,
+.adjust button {
+  border-radius: 8px;
+  font: 12.5px/1 "Segoe UI", sans-serif;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+button.primary {
+  border: 0;
+  background: #0e6b52;
+  color: #f7f3ea;
+  font-weight: 650;
+}
+
+button.primary:hover {
+  background: #0b5340;
+}
+
+button.quiet,
+.adjust button {
+  border: 1px solid #e4dccf;
+  background: transparent;
+  color: #1f1a14;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.icon-button {
+  border: 0;
+  background: transparent;
+  color: #6e675e;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.toast {
+  right: 16px;
+  bottom: 16px;
+  max-width: 280px;
+  background: #1f1a14;
+  color: #f7f3ea;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 12px 30px rgba(20, 16, 10, 0.28);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.toast button {
+  border: 0;
+  background: transparent;
+  color: #f0d7a2;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .panel,
+  .toast {
+    transition: none;
+  }
+}

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Apply — Product Engineer — Northwind</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f7f4ee;
+        color: #1f1a14;
+        font: 16px/1.45 "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 20px 80px;
+      }
+      h1 {
+        font-family: Palatino, "Palatino Linotype", serif;
+        font-size: 36px;
+        margin-bottom: 8px;
+      }
+      .role {
+        color: #4e483f;
+        margin-top: 0;
+      }
+      form {
+        display: grid;
+        gap: 18px;
+        margin-top: 24px;
+      }
+      label,
+      .field-label {
+        display: grid;
+        gap: 6px;
+        font-weight: 650;
+      }
+      textarea,
+      input,
+      [contenteditable="true"] {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #d9d0c2;
+        border-radius: 10px;
+        padding: 10px;
+        font: inherit;
+        background: white;
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+      [contenteditable="true"] {
+        min-height: 96px;
+      }
+      .count {
+        font-weight: 400;
+        color: #6e675e;
+        font-size: 13px;
+      }
+      .notice {
+        margin: 0 0 20px;
+        padding: 12px 14px;
+        background: #f8e6e1;
+        color: #8d3428;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="notice">No API key is set on this sample page, so it cannot draft an answer. This form is only here to try the fields. A real draft needs an OpenAI API key in the Job Fill popup.</p>
+      <h1>Product Engineer</h1>
+      <p class="role">Northwind · Remote · Application</p>
+      <p>
+        Northwind is hiring a product engineer to own the billing service used by support teams. You will migrate the remaining legacy invoice queue and make the tools understandable for non-engineers.
+      </p>
+      <form>
+        <label>
+          City
+          <input id="city" name="city" type="text" autocomplete="address-level2" />
+        </label>
+        <div>
+          <label for="message">Leave a message explaining why you would be a good fit.</label>
+          <textarea id="message" name="message" maxlength="180"></textarea>
+          <span id="message-count" class="count">0 / 180</span>
+        </div>
+        <label>
+          Why do you want to work here?
+          <textarea id="why" name="why"></textarea>
+        </label>
+        <div>
+          <div class="field-label" id="project-label">Tell us about a project you shipped.</div>
+          <div id="project" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="project-label"></div>
+        </div>
+      </form>
+    </main>
+    <script>
+      const message = document.querySelector("#message");
+      const count = document.querySelector("#message-count");
+      message.addEventListener("input", () => {
+        count.textContent = `${message.value.length} / 180`;
+      });
+    </script>
+  </body>
+</html>

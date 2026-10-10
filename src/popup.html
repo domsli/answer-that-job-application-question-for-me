@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job Fill</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <p class="eyebrow">Local resume project</p>
+        <h1>Job Fill</h1>
+      </div>
+      <button id="draft-focused" type="button" class="primary">Draft focused field</button>
+    </header>
+    <p class="lede">
+      Upload a resume to an OpenAI vector store once. On an application, focus a long answer box and draft. The draft searches that store. You review the text before it is inserted. The form is never submitted for you.
+    </p>
+    <p id="preview-banner" class="banner hidden">
+      Preview only. In Chrome, open extensions, turn on Developer mode, choose Load unpacked, and select this project folder.
+    </p>
+    <p id="status" class="status hidden" role="status"></p>
+
+    <section>
+      <div class="section-head">
+        <h2>Vector store</h2>
+        <span id="store-count" class="muted"></span>
+      </div>
+      <p class="hint">Files uploaded here stay in your OpenAI account. Later drafts search this store and do not upload them again.</p>
+      <label class="stack" for="vector-store">Store id</label>
+      <div class="store-row">
+        <input id="vector-store" type="text" spellcheck="false" placeholder="vs_..." />
+        <button id="create-store" type="button" class="quiet">Create</button>
+        <button id="refresh-store" type="button" class="quiet">Refresh</button>
+      </div>
+      <label class="dropzone" id="store-dropzone" tabindex="0">
+        <input id="store-file" type="file" accept=".pdf,.docx,.txt,.md,.markdown,.pptx,.html,.csv,.json,text/plain" multiple hidden />
+        <strong>Upload files to this store</strong>
+        <span>PDF, DOCX, TXT, Markdown, or other files OpenAI can read.</span>
+      </label>
+      <ul id="store-files" class="documents store-files"></ul>
+      <label class="stack" for="notes">Notes the draft should follow</label>
+      <textarea id="notes" rows="4" placeholder="Work authorization, target roles, and claims the draft must not make."></textarea>
+      <details>
+        <summary>Keep a text copy in this browser instead</summary>
+        <div class="section-head">
+          <h2>Browser copy</h2>
+          <span id="source-count" class="muted"></span>
+        </div>
+      <label class="dropzone" id="dropzone" tabindex="0">
+        <input id="file-input" type="file" accept=".pdf,.docx,.txt,.md,.markdown,text/plain" multiple hidden />
+        <strong>Drop resume or experience files</strong>
+        <span>PDF, DOCX, TXT, or Markdown. Scanned PDFs need pasted text.</span>
+      </label>
+      <ul id="documents" class="documents"></ul>
+      </details>
+    </section>
+
+    <section id="editor" class="editor hidden">
+      <div class="section-head">
+        <h2>Edit extracted text</h2>
+        <button id="close-editor" type="button" class="quiet">Done</button>
+      </div>
+      <label class="stack" for="doc-name">File name</label>
+      <input id="doc-name" type="text" />
+      <textarea id="doc-text" rows="8"></textarea>
+      <p class="hint">This text is what the drafter can use. Fix anything the file reader missed.</p>
+    </section>
+
+    <section>
+      <h2>How the answer should sound</h2>
+      <div class="grid">
+        <label>
+          Tone
+          <select id="tone">
+            <option value="direct">Direct</option>
+            <option value="warm">Warm</option>
+            <option value="concise">Concise</option>
+          </select>
+        </label>
+        <label>
+          Length
+          <select id="length">
+            <option value="match">Match the field</option>
+            <option value="short">Short</option>
+            <option value="paragraph">One paragraph</option>
+            <option value="letter">Cover letter</option>
+          </select>
+        </label>
+      </div>
+      <label class="check">
+        <input id="review" type="checkbox" checked />
+        Show the draft before inserting it
+      </label>
+    </section>
+
+    <section>
+      <h2>OpenAI</h2>
+      <p class="hint">
+        A draft sends your API key's vector store id, the question, a short excerpt of the job page, and any notes. Resume files stay in the store.
+      </p>
+      <label class="stack" for="api-key">API key</label>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-..." />
+      <label class="stack" for="model">Model</label>
+      <input id="model" type="text" list="models" spellcheck="false" />
+      <datalist id="models">
+        <option value="gpt-4o-mini"></option>
+        <option value="gpt-4.1-mini"></option>
+        <option value="gpt-4o"></option>
+        <option value="gpt-4.1"></option>
+      </datalist>
+      <button id="test-key" type="button" class="quiet">Test key</button>
+      <p class="hint">
+        Create a key at
+        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>.
+        PDF reading uses a local library: run <code>npm install</code> in this folder, then reload the extension. Word and text files work without that.
+      </p>
+    </section>
+
+    <section>
+      <h2>On the application</h2>
+      <ol>
+        <li>Click the long answer field.</li>
+        <li>Choose <strong>Draft from resume</strong>, or press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>J</kbd>.</li>
+        <li>Read the draft. Insert it only if it sticks to your real experience.</li>
+      </ol>
+      <p class="hint">Drafts are instructed not to invent employers, degrees, tools, or numbers. You still need to read them.</p>
+    </section>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
