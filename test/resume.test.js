@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 import test from "node:test";
+import { chooseDraftSource } from "../src/shared/cost.js";
 import { extractDocx, docxXmlToText } from "../src/shared/docx.js";
 import { extractDocument } from "../src/shared/extract.js";
 import { extractPdfText } from "../src/shared/pdf.js";
 import { isJobSurface, looksLikeApplicationQuestion, shouldOfferChip } from "../src/shared/fields.js";
+import { findJobDescriptionLink, jobDescriptionFromDocument, jobDescriptionFromHtml, normalizeHttpUrl } from "../src/shared/job-page.js";
 import { buildMessages, cleanAnswer, completionTokenBudget, trimToLimit } from "../src/shared/prompt.js";
 import { normalizeApiKey, validModel } from "../src/shared/storage.js";
 import { unzipEntries } from "../src/shared/unzip.js";
@@ -55,6 +57,7 @@ test("builds a grounded prompt and cleans the model answer", () => {
 
   assert.match(messages.system, /Do not invent employers/);
   assert.match(messages.system, /Do not guess a company name/);
+  assert.match(messages.user, /boilerplate/);
   assert.match(messages.user, /Northwind/);
   assert.match(messages.user, /good fit/);
   assert.match(messages.user, /Character limit: stay at or under 280/);
@@ -72,6 +75,66 @@ test("builds a grounded prompt and cleans the model answer", () => {
   assert.equal(trimToLimit("aaaa bbbb cccc", 10), "aaaa bbbb");
   assert.equal(trimToLimit("abcdefghij", 4), "abcd");
   assert.equal(completionTokenBudget(120), 80);
+});
+
+test("reads a job description from the page and from a posting link", () => {
+  const role = "Own the billing queue migration and the product engineer onboarding for the finance team. Write the plan, ship the ledger, and support the team through launch. Keep the cutover reversible.";
+  const html = [
+    "<nav>Careers home Search jobs</nav>",
+    `<script type="application/ld+json">${JSON.stringify({
+      "@type": "JobPosting",
+      title: "Product Engineer",
+      hiringOrganization: { name: "Northwind" },
+      description: `<p>${role}</p>`,
+    })}</script>`,
+    "<div class=\"job__description\"><p>This block should lose to the structured posting.</p></div>",
+  ].join("");
+  const fromHtml = jobDescriptionFromHtml(html);
+  const messages = buildMessages({ pageContext: fromHtml, jobSource: "description", question: "Why this role?" });
+  assert.match(messages.user, /Job description \(from this page\)/);
+  assert.doesNotMatch(messages.user, /boilerplate/);
+  assert.match(messages.system, /Do not treat it as the user's own experience/);
+  assert.match(fromHtml, /Role: Product Engineer/);
+  assert.match(fromHtml, /Company: Northwind/);
+  assert.match(fromHtml, /billing queue/);
+  assert.doesNotMatch(fromHtml, /Careers home/);
+
+  const block = `<div class="job__description"><p>${role}</p></div><p>Footer newsletter</p>`;
+  assert.match(jobDescriptionFromHtml(block), /billing queue/);
+  assert.doesNotMatch(jobDescriptionFromHtml(block), /newsletter/);
+
+  const headed = `<h2>Responsibilities</h2><p>${role}</p><h2>About us</h2><p>We run a cafeteria.</p>`;
+  const fromHeading = jobDescriptionFromHtml(headed);
+  assert.match(fromHeading, /Responsibilities/);
+  assert.doesNotMatch(fromHeading, /cafeteria/);
+
+  const doc = {
+    querySelectorAll(selector) {
+      if (String(selector).includes("ld+json")) {
+        return [{ textContent: JSON.stringify({ "@type": "JobPosting", title: "Product Engineer", description: `<p>${role}</p>` }) }];
+      }
+      return [];
+    },
+    querySelector() {
+      return null;
+    },
+  };
+  assert.match(jobDescriptionFromDocument(doc), /Product Engineer/);
+
+  const links = {
+    querySelectorAll(selector) {
+      if (selector !== "a[href]") return [];
+      return [
+        { textContent: "Apply now", getAttribute: (name) => (name === "href" ? "/apply" : "") },
+        { textContent: "View job description", getAttribute: (name) => (name === "href" ? "/jobs/product-engineer" : "") },
+      ];
+    },
+  };
+  assert.equal(
+    findJobDescriptionLink(links, "https://jobs.example.com/apply"),
+    "https://jobs.example.com/jobs/product-engineer",
+  );
+  assert.equal(normalizeHttpUrl("javascript:alert(1)"), "");
 });
 
 test("reads docx text, including files that store sizes only in the zip directory", async () => {
@@ -93,6 +156,15 @@ test("rejects a docx that is not a zip", async () => {
     () => unzipEntries(Buffer.from("hello"), async (bytes) => inflateRawSync(bytes)),
     /not a valid DOCX/,
   );
+});
+
+test("uses the vector store only when searching costs less than sending the resume", () => {
+  const resume = "a".repeat(5000);
+  const longResume = "a".repeat(80000);
+  assert.equal(chooseDraftSource({ model: "gpt-4o-mini", documentChars: resume.length, hasStore: true }).useStore, false);
+  assert.equal(chooseDraftSource({ model: "gpt-4o", documentChars: longResume.length, hasStore: true }).useStore, true);
+  assert.equal(chooseDraftSource({ model: "gpt-4o-mini", documentChars: 100, hasStore: true }).useStore, true);
+  assert.equal(chooseDraftSource({ model: "gpt-4o", documentChars: longResume.length, hasStore: false }).useStore, false);
 });
 
 test("reads a vector store id and a file-search answer", () => {

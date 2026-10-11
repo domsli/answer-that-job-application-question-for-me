@@ -25,6 +25,7 @@ async function init() {
   document.querySelector("#draft-focused").classList.toggle("hidden", !extension);
   const settings = await getSettings();
   document.querySelector("#notes").value = settings.notes || "";
+  document.querySelector("#job-link").value = settings.jobLink || "";
   document.querySelector("#api-key").value = settings.apiKey || "";
   document.querySelector("#model").value = settings.model || "gpt-4o-mini";
   document.querySelector("#tone").value = settings.tone || "direct";
@@ -38,6 +39,7 @@ async function init() {
   if (extension && settings.vectorStoreId) refreshStore({ quiet: true });
 
   document.querySelector("#notes").addEventListener("input", scheduleSave);
+  document.querySelector("#job-link").addEventListener("change", scheduleSave);
   document.querySelector("#api-key").addEventListener("change", scheduleSave);
   document.querySelector("#model").addEventListener("change", scheduleSave);
   document.querySelector("#tone").addEventListener("change", scheduleSave);
@@ -258,6 +260,7 @@ async function saveFromForm() {
   }
   await saveSettings({
     notes,
+    jobLink: document.querySelector("#job-link").value.trim(),
     documents,
     apiKey: normalizeApiKey(document.querySelector("#api-key").value),
     model: validModel(document.querySelector("#model").value),

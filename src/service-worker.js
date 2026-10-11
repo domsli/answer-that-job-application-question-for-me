@@ -1,6 +1,8 @@
+import { chooseDraftSource } from "./shared/cost.js";
+import { normalizeHttpUrl, readJobPageHtml, samePage } from "./shared/job-page.js";
 import { respondWithFileSearch } from "./shared/openai.js";
 import { buildMessages, cleanAnswer, completionTokenBudget } from "./shared/prompt.js";
-import { getSettings, normalizeApiKey, publicSettings, validModel } from "./shared/storage.js";
+import { getSettings, normalizeApiKey, publicSettings, saveSettings, validModel } from "./shared/storage.js";
 import { responseText, validVectorStoreId } from "./shared/vector.js";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -20,9 +22,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local") updateBadge();
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "draft-field" || tab?.id == null) return;
-  chrome.tabs.sendMessage(tab.id, { type: "draft-active" }, { frameId: info.frameId }).catch(() => {});
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "draft-active" }, { frameId: info.frameId });
+  } catch {
+    await showPageNotice(tab.id, info.frameId, await missingSetupMessage());
+  }
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
@@ -46,7 +52,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "draft") {
     draftAnswer(message)
-      .then((text) => sendResponse({ ok: true, text }))
+      .then((result) => sendResponse({ ok: true, text: result.text, note: result.note }))
       .catch((error) => sendResponse({ ok: false, error: error.message || "Couldn't draft an answer." }));
     return true;
   }
@@ -65,6 +71,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+
+async function missingSetupMessage() {
+  const settings = await getSettings();
+  if (!normalizeApiKey(settings.apiKey)) {
+    return "No API key yet. Open the Job Fill popup and paste an OpenAI API key. Nothing is generated without one.";
+  }
+  if (!validVectorStoreId(settings.vectorStoreId) && !String(settings.notes || "").trim() && !(settings.documents || []).some((document) => String(document.text || "").trim())) {
+    return "No resume yet. Upload one in the Job Fill popup before drafting.";
+  }
+  return "Reload this page, then right-click the answer field again.";
+}
+
+async function showPageNotice(tabId, frameId, message) {
+  const target = { tabId };
+  if (typeof frameId === "number") target.frameIds = [frameId];
+  await chrome.scripting.executeScript({
+    target,
+    args: [message],
+    func: (text) => {
+      let note = document.getElementById("job-fill-notice");
+      if (!note) {
+        note = document.createElement("div");
+        note.id = "job-fill-notice";
+        note.setAttribute("role", "status");
+        note.style.cssText = "position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:320px;padding:12px 14px;background:#f8e6e1;color:#8d3428;border-radius:12px;font:14px/1.4 Segoe UI,sans-serif;box-shadow:0 12px 30px rgba(40,30,10,.18)";
+        document.documentElement.append(note);
+      }
+      note.textContent = text;
+    },
+  });
+}
 
 async function askTabToDraft(tabId) {
   const key = `focus:${tabId}`;
@@ -95,32 +132,80 @@ async function draftAnswer(request) {
   const documents = settings.documents || [];
   const notes = String(settings.notes || "");
   const vectorStoreId = validVectorStoreId(settings.vectorStoreId);
-  const sourceChars = documents.reduce((sum, document) => sum + String(document.text || "").trim().length, 0) + notes.trim().length;
+  const documentChars = documents.reduce((sum, document) => sum + String(document.text || "").trim().length, 0);
+  const sourceChars = documentChars + notes.trim().length;
   if (!vectorStoreId && sourceChars < 40) {
     throw new Error("Upload a resume to the vector store, or add experience notes in the Job Fill popup.");
   }
 
+  const model = validModel(settings.model);
+  const choice = chooseDraftSource({ model, documentChars, hasStore: Boolean(vectorStoreId) });
+  const job = await resolveJobPage(request);
   const maxLength = Number(request.maxLength) > 0 ? Math.floor(Number(request.maxLength)) : null;
   const messages = buildMessages({
-    documents,
+    documents: choice.useStore ? [] : documents,
     notes,
     question: request.question,
-    pageContext: request.pageContext,
+    pageContext: job.text,
     pageUrl: request.pageUrl,
+    jobSource: job.source,
     tone: settings.tone,
     length: settings.length,
     maxLength,
     adjustment: request.adjustment,
-    fileSearch: Boolean(vectorStoreId),
+    fileSearch: choice.useStore,
   });
 
-  const model = validModel(settings.model);
-  const content = vectorStoreId
+  const content = choice.useStore
     ? await completeFromStore(apiKey, model, messages, completionTokenBudget(maxLength), vectorStoreId)
     : await complete(apiKey, model, messages, completionTokenBudget(maxLength));
   const answer = cleanAnswer(content);
   if (!answer) throw new Error("The model returned an empty answer.");
-  return answer;
+  return { text: answer, note: [choice.note, job.note].filter(Boolean).join(" ") };
+}
+
+async function resolveJobPage(request) {
+  const pageUrl = String(request.pageUrl || "");
+  let text = String(request.pageContext || "").trim();
+  let source = request.jobSource === "description" ? "description" : "page";
+  const typed = String(request.jobLink || "").trim();
+  const explicit = normalizeHttpUrl(typed);
+  const discovered = source === "description" ? "" : normalizeHttpUrl(request.discoveredJobLink);
+  const link = explicit || discovered;
+  let note = source === "description" ? "Used the job description on this page." : "";
+
+  if (typed && !explicit) {
+    note = "That job link needs to start with http:// or https://. Used the text on this page instead.";
+  } else if (link && !samePage(link, pageUrl)) {
+    try {
+      const fetched = await fetchJobPage(link);
+      if (fetched.text) {
+        text = fetched.text;
+        source = fetched.kind === "description" ? (explicit ? "link" : "discovered") : "linked-page";
+        note = explicit ? "Used the job description from your link." : "Used the job description linked from this page.";
+      } else if (explicit) {
+        note = "That job link did not include a description. Used the text on this page instead.";
+      }
+    } catch (error) {
+      note = explicit ? `${error.message} Used the text on this page instead.` : note;
+    }
+  }
+
+  if ("jobLink" in request) await saveSettings({ jobLink: explicit });
+  return { text, source, note };
+}
+
+async function fetchJobPage(url) {
+  const response = await fetch(url, {
+    redirect: "follow",
+    credentials: "omit",
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error(`Couldn't open that job link (${response.status}).`);
+  const type = response.headers.get("content-type") || "";
+  if (type && !/html|xml|text\/plain|json/i.test(type)) throw new Error("That job link is not a web page.");
+  const html = (await response.text()).slice(0, 500000);
+  return readJobPageHtml(html);
 }
 
 async function completeFromStore(apiKey, model, messages, maxTokens, vectorStoreId) {

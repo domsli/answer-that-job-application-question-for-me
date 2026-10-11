@@ -37,7 +37,7 @@
 
 .panel {
   width: 340px;
-  max-height: min(440px, calc(100vh - 24px));
+  max-height: min(520px, calc(100vh - 24px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -96,15 +96,33 @@
   box-sizing: border-box;
 }
 
-.adjust input {
-  flex: 1;
-  min-width: 0;
+.adjust input,
+.job-link input {
   border: 1px solid #e4dccf;
   border-radius: 8px;
   background: #fff;
   color: #1f1a14;
   padding: 6px 8px;
   font: 12px/1.3 "Segoe UI", sans-serif;
+}
+
+.adjust input {
+  flex: 1;
+  min-width: 0;
+}
+
+.job-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  color: #6e675e;
+  font-size: 12px;
+}
+
+.job-link input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .meta,
@@ -127,6 +145,14 @@
   font-size: 13px;
 }
 
+.panel:not(.has-draft) .insert,
+.panel:not(.has-draft) .disclaimer,
+.panel:not(.has-draft) .adjust button,
+.panel.has-draft .draft-start {
+  display: none;
+}
+
+.panel.needs-setup .job-link,
 .panel.needs-setup .draft,
 .panel.needs-setup .meta,
 .panel.needs-setup .disclaimer,

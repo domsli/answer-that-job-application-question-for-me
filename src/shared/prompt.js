@@ -1,6 +1,7 @@
 const MAX_DOCUMENT_CHARS = 20000;
 const MAX_SOURCE_CHARS = 80000;
 const MAX_PAGE_CHARS = 6000;
+const MAX_JOB_CHARS = 8000;
 
 const TONES = {
   direct: "Direct and specific. No fluff and no clichés such as passionate, thrilled, or results-driven.",
@@ -14,6 +15,7 @@ export function buildMessages({
   question = "",
   pageContext = "",
   pageUrl = "",
+  jobSource = "",
   tone = "direct",
   length = "match",
   maxLength = null,
@@ -32,7 +34,8 @@ export function buildMessages({
       : "Use only the resume, experience files, and notes in the user message.",
     "Do not invent employers, job titles, dates, degrees, certifications, tools, metrics, or anecdotes that are not in that material.",
     "If the question asks for something the material does not support, write a short honest answer from the closest real experience and leave the gap unfilled.",
-    "Name a company or role only when it appears in the page text or URL. Do not guess a company name.",
+    "Use the job description only to understand the role. Do not treat it as the user's own experience.",
+    "Name a company or role only when it appears in the job description, page text, or URL. Do not guess a company name.",
     "Obey any limits or preferences in the notes.",
     "Do not add a greeting, sign-off, or subject line unless the question asks for a full letter.",
     "No markdown, no bullets, and no quotation marks around the answer.",
@@ -46,13 +49,7 @@ export function buildMessages({
   if (limit) lines.push(`Character limit: stay at or under ${limit} characters.`);
   lines.push("", `Field question: ${clip(question, 1000) || "Infer the question from the job page. If it is still unclear, explain why the user would be a good fit for the role described."}`);
   if (pageUrl) lines.push(`Page URL: ${clip(pageUrl, 300)}`);
-  if (pageContext) {
-    lines.push(
-      "",
-      "Job page text (may include menus and boilerplate; use it only to understand the role and company):",
-      clip(pageContext, MAX_PAGE_CHARS),
-    );
-  }
+  if (pageContext) lines.push("", ...jobContextLines(pageContext, jobSource));
   if (fileSearch) {
     lines.push("", "Experience files are in the file search store. Search that store before you write.");
     if (source.text) lines.push("", "Extra experience text stored in the browser:", source.text);
@@ -108,6 +105,28 @@ function lengthInstruction(length, limit) {
   if (limit && limit < 400) return "2 to 4 sentences.";
   if (limit && limit < 800) return "One short paragraph.";
   return "About 90 to 160 words, in one or two short paragraphs.";
+}
+
+function jobContextLines(pageContext, jobSource) {
+  if (jobSource === "description") {
+    return ["Job description (from this page):", clip(pageContext, MAX_JOB_CHARS)];
+  }
+  if (jobSource === "link") {
+    return ["Job description (from the link the user provided):", clip(pageContext, MAX_JOB_CHARS)];
+  }
+  if (jobSource === "discovered") {
+    return ["Job description (linked from this page):", clip(pageContext, MAX_JOB_CHARS)];
+  }
+  if (jobSource === "linked-page") {
+    return [
+      "Job page from the link (may include menus and boilerplate; use it only to understand the role and company):",
+      clip(pageContext, MAX_PAGE_CHARS),
+    ];
+  }
+  return [
+    "Job page text (may include menus and boilerplate; use it only to understand the role and company):",
+    clip(pageContext, MAX_PAGE_CHARS),
+  ];
 }
 
 function clipDocuments(documents) {

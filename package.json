@@ -5,10 +5,14 @@
   "type": "module",
   "description": "Chrome extension that drafts job-application answers from your resume.",
   "scripts": {
+    "build": "esbuild src/content.js --bundle --format=iife --outfile=src/content-bundle.js --loader:.css=text",
     "test": "node --test test/*.test.js",
     "icons": "node scripts/make-icons.js"
   },
   "dependencies": {
     "pdfjs-dist": "4.10.38"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

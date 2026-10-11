@@ -1,4 +1,6 @@
+import contentCss from "./content.css";
 import { isJobSurface, shouldOfferChip } from "./shared/fields.js";
+import { cleanPageText, findJobDescriptionLink, jobDescriptionFromDocument } from "./shared/job-page.js";
 import { trimToLimit } from "./shared/prompt.js";
 
 const HOST_ID = "job-fill-host";
@@ -24,13 +26,19 @@ function init() {
   api().runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "draft-active") return;
     const field = manualField();
-    if (!field) {
-      sendResponse({ ok: false, error: "Click the answer field first." });
-      return;
-    }
+    if (field) beginDraft(field);
+    else openSetupPanel();
     sendResponse({ ok: true });
-    beginDraft(field);
   });
+
+  document.addEventListener(
+    "contextmenu",
+    (event) => {
+      const target = eventTarget(event);
+      if (target && isManualFillable(target)) rememberField(target);
+    },
+    true,
+  );
 
   document.addEventListener(
     "focusin",
@@ -69,6 +77,7 @@ function init() {
     if (state.field) beginDraft(state.field);
   });
   ui.close.addEventListener("click", () => closePanel());
+  ui.start.addEventListener("click", () => startDraft());
   ui.insert.addEventListener("click", () => insertDraft());
   ui.retry.addEventListener("click", () => regenerate());
   ui.undo.addEventListener("click", () => undoInsert());
@@ -125,6 +134,22 @@ function init() {
     ui.chip.classList.add("hidden");
   }
 
+  function openSetupPanel() {
+    state.requestId += 1;
+    state.field = null;
+    ui.jobLink.dataset.ready = "";
+    ui.question.textContent = "Draft answer from resume";
+    ui.draft.value = "";
+    ui.panel.classList.remove("has-draft");
+    ui.panel.classList.remove("hidden");
+    ui.panel.style.top = "auto";
+    ui.panel.style.left = "auto";
+    ui.panel.style.right = "16px";
+    ui.panel.style.bottom = "16px";
+    updateMeta();
+    preparePanel(state.requestId);
+  }
+
   function beginDraft(field) {
     rememberField(field);
     state.previous = readField(field);
@@ -133,16 +158,50 @@ function init() {
     ui.question.textContent = labelFor(field) || "Application answer";
     ui.draft.value = "";
     ui.adjust.value = "";
-    ui.panel.classList.add("needs-setup");
+    ui.jobLink.dataset.ready = "";
+    ui.panel.classList.remove("needs-setup", "has-draft");
     ui.panel.classList.remove("hidden");
-    ui.status.textContent = "Checking for an API key…";
-    ui.status.classList.remove("hidden", "error");
+    ui.draft.classList.add("hidden");
+    ui.status.textContent = "";
+    ui.status.classList.add("hidden");
+    ui.status.classList.remove("error");
     hideChip();
     placeNear(ui.panel, field, { width: 340 });
-    ui.ready.then(() => {
-      if (!ui.panel.classList.contains("hidden")) placeNear(ui.panel, field, { width: 340 });
-    });
-    generate(state.requestId, "");
+    updateMeta();
+    preparePanel(state.requestId);
+  }
+
+  async function preparePanel(requestId) {
+    const settings = await api().runtime.sendMessage({ type: "public-settings" }).catch(() => null);
+    if (requestId !== state.requestId) return;
+    applySavedJobLink(settings);
+    if (!settings?.hasKey) {
+      showSetupProblem("No API key yet. Open the Job Fill popup and paste an OpenAI API key. Nothing is generated without one.");
+      return;
+    }
+    if (!settings?.hasResume) {
+      showSetupProblem("No resume yet. Upload one in the Job Fill popup before drafting.");
+      return;
+    }
+    if (!state.field?.isConnected) {
+      showSetupProblem("Click the answer field, then choose Draft answer from resume again.");
+      return;
+    }
+    ui.panel.classList.remove("needs-setup");
+    setBusy(false, "Nothing is sent until you choose Draft answer.");
+    updateMeta();
+  }
+
+  function applySavedJobLink(settings) {
+    if (!settings || ui.jobLink.dataset.ready) return;
+    if (!ui.jobLink.value) ui.jobLink.value = settings.jobLink || "";
+    ui.jobLink.dataset.ready = "1";
+  }
+
+  function startDraft() {
+    if (!state.field) return;
+    state.requestId += 1;
+    generate(state.requestId, ui.adjust.value);
   }
 
   async function generate(requestId, adjustment) {
@@ -156,14 +215,25 @@ function init() {
       showSetupProblem("No resume yet. Upload one in the Job Fill popup before drafting.");
       return;
     }
+    if (!state.field?.isConnected) {
+      showSetupProblem("Click the answer field, then choose Draft answer from resume again.");
+      return;
+    }
+    applySavedJobLink(settings);
+    const page = pageJob();
+    const typedLink = ui.jobLink.value.trim();
+    const readingJob = Boolean(typedLink || (page.source !== "description" && page.link));
     ui.panel.classList.remove("needs-setup");
-    setBusy(true, "Drafting from your resume…");
+    setBusy(true, readingJob ? "Reading the job description…" : "Drafting from your resume…");
 
     const response = await api()
       .runtime.sendMessage({
         type: "draft",
         question: labelFor(state.field),
-        pageContext: pageContext(),
+        pageContext: page.text,
+        jobSource: page.source,
+        discoveredJobLink: page.link,
+        jobLink: typedLink,
         pageUrl: location.href,
         maxLength: state.maxLength,
         adjustment,
@@ -177,7 +247,7 @@ function init() {
     }
 
     ui.draft.value = response.text;
-    setBusy(false, "");
+    setBusy(false, response.note || "");
     updateMeta();
     if (settings.reviewBeforeInsert === false) insertDraft();
   }
@@ -224,6 +294,7 @@ function init() {
     ui.status.classList.toggle("error", Boolean(isError));
     ui.status.classList.toggle("hidden", !message);
     ui.insert.disabled = busy || !ui.draft.value.trim();
+    ui.start.disabled = busy;
     ui.retry.disabled = busy;
     ui.draft.disabled = busy;
     if (busy && !ui.draft.value.trim()) ui.draft.classList.add("hidden");
@@ -238,6 +309,7 @@ function init() {
     ui.meta.textContent = limit ? `${text.length} / ${limit} characters · ${words} words` : `${words} words`;
     ui.meta.classList.toggle("over", Boolean(over));
     ui.meta.classList.toggle("hidden", !text);
+    ui.panel.classList.toggle("has-draft", Boolean(text));
     ui.insert.disabled = !text || ui.draft.disabled;
     ui.insert.textContent = over ? "Insert within limit" : "Insert answer";
   }
@@ -265,17 +337,8 @@ function createUi() {
   document.documentElement.append(host);
 
   const style = document.createElement("style");
-  style.textContent = fallbackCss();
+  style.textContent = contentCss;
   shadow.append(style);
-  const ready = fetch(api().runtime.getURL("src/content.css"))
-    .then((response) => {
-      if (!response.ok) throw new Error("Missing styles");
-      return response.text();
-    })
-    .then((css) => {
-      style.textContent = css;
-    })
-    .catch(() => {});
 
   const chip = button("Draft from resume", "chip hidden");
   chip.title = "Draft from your resume (Alt+Shift+J)";
@@ -295,6 +358,16 @@ function createUi() {
 
   const question = document.createElement("p");
   question.className = "question";
+  const jobLinkLabel = document.createElement("label");
+  jobLinkLabel.className = "job-link";
+  const jobLinkCaption = document.createElement("span");
+  jobLinkCaption.textContent = "Job description link";
+  const jobLink = document.createElement("input");
+  jobLink.type = "url";
+  jobLink.placeholder = "https://… if this page has no posting";
+  jobLink.setAttribute("aria-label", "Job description link");
+  jobLink.spellcheck = false;
+  jobLinkLabel.append(jobLinkCaption, jobLink);
   const status = document.createElement("p");
   status.className = "status hidden";
   const draft = document.createElement("textarea");
@@ -317,10 +390,11 @@ function createUi() {
 
   const actions = document.createElement("div");
   actions.className = "actions";
+  const start = button("Draft answer", "primary draft-start");
   const insert = button("Insert answer", "primary");
-  actions.append(insert);
+  actions.append(start, insert);
 
-  panel.append(head, question, status, draft, meta, disclaimer, adjust, actions);
+  panel.append(head, question, jobLinkLabel, status, draft, meta, disclaimer, adjust, actions);
 
   const toast = document.createElement("div");
   toast.className = "toast hidden";
@@ -330,7 +404,7 @@ function createUi() {
   toast.append(toastMessage, undo);
 
   shadow.append(chip, panel, toast);
-  return { host, shadow, chip, panel, close, question, status, draft, meta, adjust: tweak, retry, insert, toast, toastMessage, undo, ready };
+  return { host, shadow, chip, panel, close, question, jobLink, status, draft, meta, adjust: tweak, retry, start, insert, toast, toastMessage, undo };
 }
 
 function button(text, className) {
@@ -446,9 +520,12 @@ function setFieldValue(element, value) {
   }
 }
 
-function pageContext() {
+function pageJob() {
+  const description = jobDescriptionFromDocument(document);
+  const link = findJobDescriptionLink(document, location.href);
+  if (description) return { text: description, source: "description", link };
   const root = document.querySelector("main, article, [role='main']") || document.body;
-  return (root.innerText || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 6000);
+  return { text: cleanPageText(root.innerText || "").slice(0, 6000), source: "page", link };
 }
 
 function placeNear(element, field, { width, preferTop = false }) {
@@ -460,10 +537,9 @@ function placeNear(element, field, { width, preferTop = false }) {
   if (top < 8) top = 8;
   if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
   if (left < 8) left = 8;
+  element.style.right = "auto";
+  element.style.bottom = "auto";
   element.style.top = `${top}px`;
   element.style.left = `${left}px`;
 }
 
-function fallbackCss() {
-  return ":host{all:initial;position:fixed;z-index:2147483647}.hidden{display:none}.chip{position:fixed;background:#0e6b52;color:#fff;border:0;border-radius:999px;padding:7px 10px}.panel{position:fixed;width:340px;background:#fff;padding:12px;border:1px solid #ccc}";
-}

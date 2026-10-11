@@ -9,6 +9,7 @@ export const DEFAULTS = {
   notes: "",
   documents: [],
   vectorStoreId: "",
+  jobLink: "",
 };
 
 export const MAX_DOCUMENTS = 8;
@@ -44,6 +45,7 @@ export function publicSettings(settings) {
     hasKey: Boolean(String(settings.apiKey || "").trim()),
     tone: settings.tone || "direct",
     length: settings.length || "match",
+    jobLink: String(settings.jobLink || ""),
   };
 }
 
